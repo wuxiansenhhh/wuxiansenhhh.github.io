@@ -2,7 +2,7 @@
 title: 卢本伟广场
 SEOTitle: 卢本伟的博客 | 卢本伟广场
 header-img: img/post-bg-desk.jpg
-email: qiubaiying@gmail.com
+email: 760342598@qq.com
 description: "这里是卢本伟广场."
 keyword: "lbw, 卢本伟广场, 卢本伟的博客, lbw, 卢本伟, iOS, Apple, iPhone"
 url: "http://wuxiansenhhh.github.io"          # your host, for absolute URL
@@ -12,7 +12,7 @@ github_repo: "https://github.com/wuxiansenhhh/wuxiansenhhh.github.io.git" # you 
 # Sidebar settings
 sidebar: true                           # whether or not using Sidebar.
 sidebar-about-description: "我卢本伟没有开挂"
-sidebar-avatar: /img/avatar-m.jpg      # use absolute URL, seeing it's used in both `/` and `/about/`
+sidebar-avatar: img/avatar-m.jpg      # use absolute URL, seeing it's used in both `/` and `/about/`
 
 
 
