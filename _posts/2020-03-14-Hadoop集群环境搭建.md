@@ -1,0 +1,338 @@
+# Hadoop+zookeeper集群环境搭建步骤
+
+安装hadoop，需要多台机器构建集群(最少3台)
+这里我使用三台机器搭建hadoop伪分布式集群以及zookeeper
+
+|  主机名  |     ip地址     |
+| :------: | :------------: |
+| bigdata1 | 192.168.100.10 |
+| bigdata2 | 192.168.100.20 |
+| bigdata3 | 192.168.100.30 |
+
+
+
+## 1、配置ip地址
+
+vim /etc/sysconfig/network-scripts/ifcfg-ens33![配置ip地址](C:\Users\86198\Desktop\配置ip地址.png)
+
+配置完成后重启网络服务然后ping www.baidu.com
+	service network restart
+
+## 2、关闭SELINUX
+
+vim /etc/selinux/config
+将enforcing注释掉
+添加disabled
+![](C:\Users\86198\Desktop\捕获.PNG)
+
+## 3、关闭防火墙
+
+​	systemctl  stop firewalld.service  关闭防火墙
+	systemctl  disable  firewalld.service  永久关闭防火墙
+
+## 4、修改主机名
+
+vim /etc/hostname
+
+## 5、域名映射 
+
+vim /etc/hosts
+192.168.100.10	bigdata1
+192.168.100.20	bigdata2
+192.168.100.30	bigdata3
+
+## 6、配置免密登录
+
+每台机子都要生成密钥
+	ssh-keygen -t rsa  三次回车
+将各个机子的密钥发送给主机(master)
+	ssh-copy-id  bigdata1
+	ssh-copy-id  bigdata2
+	ssh-copy-id  bigdata3
+在主机中将密钥再分发给各个节点
+	scp /root/.ssh/authorized_keys bigdata2:/root/.ssh
+	scp /root/.ssh/authorized_keys bigdata2:/root/.ssh
+
+## 7、卸载openjdk，下载新的jdk上传并解压，配置环境变量
+
+vim /etc/profile
+
+export JRE_HOME=$JAVA_HOME/jre
+export CLASSPATH=.:$JAVA_HOME/lib/dt.jar:$JAVA_HOME/lib/tools.jar
+export JAVA_HOME=/usr/local/src/jdk1.8.0_211
+export HADOOP_HOME=/usr/local/src/hadoop-2.7.5/
+export PATH=$PATH:$JAVA_HOME/bin:$HADOOP_HOME/sbin:$HADOOP_HOME/bin
+
+export NODE_HOME=/usr/local/src/es/node-v8.1.0-linux-x64
+export PATH=:$PATH:$NODE_HOME/bin
+
+export HBASE_HOME=/usr/local/src/hbase-2.0.0
+export PATH=:$HBASE_HOME/bin:$PATH
+
+export HADOOP_CONF_DIR=/usr/local/src/hadoop-2.7.5/etc/hadoop
+
+**配置完环境变量后需要source /etc/profile生效**
+
+## 8、下载zookeeper上传并解压
+
+### 	8.1、创建zkdata并再创建一个文件myid添加1
+
+### 		8.2、进入zookeeper的conf目录将zoo_sample.cfg修改配置文件zoo.cfg
+
+​		添加以下内容：
+			dataDir=/usr/local/src/zookeeper-3.4.5/zkdata
+			server.1 = 主机名:2888:3888
+			server.2 = 主机名:2888:3888
+			server.3 = 主机名:2888:3888
+			autopurge.snapRetainCount=3
+			autopurge.purgeInterval=1
+
+### 	8.3、分发zookeeper到各个节点，
+
+​	cd /usr/local/src
+	scp -r zookeeper-3.4.5 bigdata2:$PWD
+	scp -r zookeeper-3.4.5 bigdata2:$PWD
+
+​	修改zkdata/myid中的数字  > : 表示覆盖   >> : 表示追加
+		在第二台机器中修改为2 ：echo 2 > /usr/local/src/zookeeper-3.4.5/zkdata/myid
+		在第三台机器中修改为3 ：echo 2 > /usr/local/src/zookeeper-3.4.5/zkdata/myid
+
+### 	8.3、在每台节点上启动zk  
+
+​		bin/zkServer.sh start
+
+## 9、下载Hadoop上传并解压					
+
+### 	修改6个配置文件
+
+```
+core-site.xml  
+hdfs-site.xml  
+yarn-site.xml  
+mapred-site.xml  
+slaves  
+hadoop-env.sh
+```
+
+
+core-site.xml
+
+    <configuration>
+    <!--  指定集群的文件系统类型:分布式文件系统 -->
+    	<property>
+    		<name>fs.default.name</name>
+    		<value>hdfs://bigdata1:8020</value>
+    	</property>
+    	<!--  指定临时文件存储目录 -->
+    	<property>
+    		<name>hadoop.tmp.dir</name>
+    		<value>/usr/local/src/hadoop-2.7.5/hadoopDatas/tempDatas</value>
+    	</property>
+    	<!--  缓冲区大小，实际工作中根据服务器性能动态调整 -->
+    	<property>
+    		<name>io.file.buffer.size</name>
+    		<value>4096</value>
+    	</property>
+    	<!--  开启hdfs的垃圾桶机制，删除掉的数据可以从垃圾桶中回收，单位分钟 -->
+    	<property>
+    		<name>fs.trash.interval</name>
+    		<value>10080</value>
+    	</property>
+    </configuration>
+hdfs-site.xml
+
+
+	<configuration>
+		<property>
+			<name>dfs.namenode.secondary.http-address</name>
+			<value>bigdata1:50090</value>
+		</property>
+	
+		<!-- 指定namenode的访问地址和端口 -->
+		<property>
+			<name>dfs.namenode.http-address</name>
+			<value>bigdata1:50070</value>
+		</property>
+		<!-- 指定namenode元数据的存放位置 -->
+		<property>
+			<name>dfs.namenode.name.dir</name>
+			<value>file:///usr/local/src/hadoop-2.7.5/hadoopDatas/namenodeDatas,file:///usr/local/src/hadoop-2.7.5/hadoopDatas/namenodeDatas2</value>
+		</property>
+		<!--  定义dataNode数据存储的节点位置，实际工作中，一般先确定磁盘的挂载目录，然后多个目录用，进行分割  -->
+		<property>
+			<name>dfs.datanode.data.dir</name>
+			<value>file:///usr/local/src/hadoop-2.7.5/hadoopDatas/datanodeDatas,file:///usr/local/src/hadoop-2.7.5/hadoopDatas/datanodeDatas2</value>
+		</property>
+		
+		<!-- 指定namenode日志文件的存放目录 -->
+		<property>
+			<name>dfs.namenode.edits.dir</name>
+			<value>file:///usr/local/src/hadoop-2.7.5/hadoopDatas/nn/edits</value>
+		</property>
+		<property>
+			<name>dfs.namenode.checkpoint.dir</name>
+			<value>file:///usr/local/src/hadoop-2.7.5/hadoopDatas/snn/name</value>
+		</property>
+		<property>
+			<name>dfs.namenode.checkpoint.edits.dir</name>
+			<value>file:///usr/local/src/hadoop-2.7.5/hadoopDatas/dfs/snn/edits</value>
+		</property>
+		<!-- 文件切片的副本个数-->
+		<property>
+			<name>dfs.replication</name>
+			<value>3</value>
+		</property>
+	
+		<!-- 设置HDFS的文件权限-->
+		<property>
+			<name>dfs.permissions</name>
+			<value>true</value>
+		</property>
+	
+		<!-- 设置一个文件切片的大小：128M-->
+		<property>
+			<name>dfs.blocksize</name>
+			<value>134217728</value>
+		</property>
+	</configuration>
+mapred-site.xml
+
+```
+<configuration>
+<!-- 开启MapReduce小任务模式 -->
+	<property>
+		<name>mapreduce.job.ubertask.enable</name>
+		<value>true</value>
+	</property>
+	
+	<!-- 设置历史任务的主机和端口 -->
+	<property>
+		<name>mapreduce.jobhistory.address</name>
+		<value>bigdata1:10020</value>
+	</property>
+	<!-- 设置网页访问历史任务的主机和端口 -->
+	<property>
+		<name>mapreduce.jobhistory.webapp.address</name>
+		<value>bigdata1:19888</value>
+	</property>
+</configuration>
+```
+
+yarn-site.xml
+
+```
+<configuration>
+<!-- Site specific YARN configuration properties -->
+<!-- 配置yarn主节点的位置 -->
+	<property>
+		<name>yarn.resourcemanager.hostname</name>
+		<value>bigdata1</value>
+	</property>
+	<property>
+		<name>yarn.nodemanager.aux-services</name>
+		<value>mapreduce_shuffle</value>
+	</property>
+	
+	<!-- 开启日志聚合功能 -->
+	<property>
+		<name>yarn.log-aggregation-enable</name>
+		<value>true</value>
+	</property>
+	<!-- 设置聚合日志在hdfs上的保存时间 -->
+	<property>
+		<name>yarn.log-aggregation.retain-seconds</name>
+		<value>604800</value>
+	</property>
+	<!-- 设置yarn集群的内存分配方案 -->
+	<property>    
+		<name>yarn.nodemanager.resource.memory-mb</name>    
+		<value>20480</value>
+	</property>
+
+	<property>  
+        	 <name>yarn.scheduler.minimum-allocation-mb</name>
+         	<value>2048</value>
+	</property>
+	<property>
+		<name>yarn.nodemanager.vmem-pmem-ratio</name>
+		<value>2.1</value>
+	</property>
+</configuration>
+```
+
+slaves
+
+```
+bigdata1
+bigdata2
+bigdata3
+```
+
+hadoop-env.sh
+	添加java的目录
+	export JAVA_HOME=/usr/local/src/jdk1.8.0_211
+
+第一台机器执行一下命令
+
+```
+mkdir -p /usr/local/hadoop-2.7.5/hadoopDatas/tempDatas 
+mkdir -p /usr/local/hadoop-2.7.5/hadoopDatas/namenodeDatas 
+mkdir -p /usr/local/hadoop-2.7.5/hadoopDatas/namenodeDatas2 
+mkdir -p /usr/local/hadoop-2.7.5/hadoopDatas/datanodeDatas 
+mkdir -p /usr/local/hadoop-2.7.5/hadoopDatas/datanodeDatas2 
+mkdir -p /usr/local/hadoop-2.7.5/hadoopDatas/nn/edits 
+mkdir -p /usr/local/hadoop-2.7.5/hadoopDatas/snn/name
+mkdir -p /usr/local/hadoop-2.7.5/hadoopDatas/dfs/snn/edits
+```
+
+然后分发到各个机器上
+
+```
+cd /usr/local/src
+scp -r hadoop-2.7.5 bigdata2:$PWD
+scp -r hadoop-2.7.5 bigdata2:$PWD
+```
+
+
+
+## 10、启动集群(以上配置文件为伪分布式配置)
+
+### 伪分布式集群启动
+
+1)格式化namenode   
+cd  /usr/local/src/hadoop-2.7.5/ 
+bin/hdfs namenode -format 
+2)启动集群
+sbin/start-dfs.sh 
+sbin/start-yarn.sh 
+sbin/mr-jobhistory-daemon.sh start historyserver
+
+### 高可用集群启动方式
+
+1)先启动zookeeper  
+	bin/zkServer.sh start  
+2)格式化zk  
+	bin/hdfs zkfc -formatZK  
+3)启动journalnode  
+	sbin/hadoop-daemons.sh start journalnode  
+4)格式化namenode   
+	bin/hdfs namenode -format  
+5)启动dfs集群      
+	sbin/start-dfs.sh  
+6)在第二台机子上执行   
+	bin/hdfs namenode -bootstrapStandby  
+7)在第二台机子上启动namenode  
+	sbin/hadoopdaemon.sh start namenode  
+8)最后启动yarn集群
+
+## 11、jps查看进程
+
+## 12、网页查看地址
+
+​	http://bigdata1:50070
+
+扩展:   
+       显示当前所有可用的 yum 源  
+        	yum repolist all
+	直接通过拖拽的方式上传文件的命令
+		yum install -y lrzsz
