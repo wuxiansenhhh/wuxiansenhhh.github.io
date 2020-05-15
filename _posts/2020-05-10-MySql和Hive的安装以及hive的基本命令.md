@@ -148,7 +148,7 @@ https://blog.csdn.net/JENREY/article/details/79870864
 	
 		bin/hive -f hive.sql
 
-### 7. Hive 的基本操作
+### 6. Hive 的基本操作
 
 1.数据库操作
 
